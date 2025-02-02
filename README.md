@@ -2,7 +2,7 @@
 
 ### Download all types of media from Telegram to your local system even if it is restricted
 
-#### To get started, download binaries from the [Modified version](https://github.com/bipinkrish/tgd/releases) or [Original Releases Section](https://github.com/bipinkrish/tgd/releases). Supports [Windows](https://github.com/bipinkrish/tgd/releases/download/v1.2/tgd.exe) and [Linux](https://github.com/bipinkrish/tgd/releases/download/v1.2/tgd).
+#### To get started, download binaries from the [Modified version](https://github.com/abortacc/TGD/releases/tag/v1.2.M) or [Original Releases Section](https://github.com/bipinkrish/tgd/releases). Supports [Windows](https://github.com/bipinkrish/tgd/releases/download/v1.2/tgd.exe) and [Linux](https://github.com/bipinkrish/tgd/releases/download/v1.2/tgd).
 
 * If you do not have a Session String for your account, the program will ask for login credentials to generate one. The phone number should be in the format:
 
@@ -34,7 +34,7 @@
 
 ### Загрузка всех типов медиафайлов из Telegram на ваш локальный компьютер, даже если они ограничены
 
-#### Чтобы начать, скачайте файлы из [Модифицированной версии](https://github.com/bipinkrish/tgd/releases) или [Оригинального раздела Releases](https://github.com/bipinkrish/tgd/releases). Поддерживаются [Windows](https://github.com/bipinkrish/tgd/releases/download/v1.2/tgd.exe) и [Linux](https://github.com/bipinkrish/tgd/releases/download/v1.2/tgd).
+#### Чтобы начать, скачайте файлы из [Модифицированной версии](https://github.com/abortacc/TGD/releases/tag/v1.2.M) или [Оригинального раздела Releases](https://github.com/bipinkrish/tgd/releases). Поддерживаются [Windows](https://github.com/bipinkrish/tgd/releases/download/v1.2/tgd.exe) и [Linux](https://github.com/bipinkrish/tgd/releases/download/v1.2/tgd).
 
 * Если у вас нет Session String для вашего аккаунта, программа запросит данные для входа, чтобы сгенерировать его. Номер телефона должен быть в формате:
 
