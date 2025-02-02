@@ -48,8 +48,9 @@ def preProcess() -> Tuple[str, str, str]:
 
 
 def handleEverything():
-    link = input("\nEnter a message/post link: ")
-    print()
+    link = input("\nEnter a message/post link (or type 'exit' to quit): ")
+    if link.lower() == "exit":
+        exit(0)
 
     ################
 
@@ -67,8 +68,8 @@ def handleEverything():
         else:
             chatid = datas[3]
     else:
-        print("Not a Telegram Link")
-        wait()
+        print(f"'{link}' - Not a Telegram Link")
+        return
 
     ################
 
@@ -109,9 +110,6 @@ def main():
             print_examples()
             while True:
                 handleEverything()
-                cont = input("Do you wish to continue? (y/n): ")
-                if cont.lower() != "y":
-                    break
     except KeyboardInterrupt:
         print("\nKeyboard interrupt detected. Exiting...")
         wait()
