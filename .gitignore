@@ -1,4 +1,6 @@
 config.json
+app.log
+logging.conf
 links.txt
 tgd
 tgd.exe

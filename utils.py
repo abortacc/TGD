@@ -3,6 +3,7 @@ from pyrogram.types import Message
 from pyrogram import enums
 from time import time
 from os import system, name as osname
+import logging
 
 
 def wait():
@@ -75,6 +76,55 @@ def print_dowload_msg(media: enums.MessageMediaType, msgid: int, fromID: int, to
         f"{convert_bytes(media.file_size)}",
         f"({(msgid - fromID + 1)}/{total})",
     )
+
+
+def create_logging_config():
+    config_content = """
+[loggers]
+keys=root
+
+[handlers]
+keys=fileHandler,consoleHandler
+
+[formatters]
+keys=genericFormatter
+
+[logger_root]
+level=DEBUG
+handlers=fileHandler,consoleHandler
+
+[handler_fileHandler]
+class=FileHandler
+formatter=genericFormatter
+args=('app.log', 'a')
+
+[handler_consoleHandler]
+class=StreamHandler
+formatter=genericFormatter
+args=(sys.stdout,)
+
+[formatter_genericFormatter]
+format=%(asctime)s - %(name)s - %(levelname)s - %(message)s
+datefmt=%Y-%m-%d %H:%M:%S
+"""
+    with open("logging.conf", "w") as config_file:
+        config_file.write(config_content.strip())
+
+
+def log_media_details(media, msgid: int, fromID: int, total: int):
+    try:
+        media_info = {
+            "type": media.__class__.__name__,
+            "file_name": getattr(media, "file_name", "N/A"),
+            "file_size": convert_bytes(getattr(media, "file_size", 0)),
+            "mime_type": getattr(media, "mime_type", "N/A"),
+            "duration": getattr(media, "duration", "N/A"),
+            "width": getattr(media, "width", "N/A"),
+            "height": getattr(media, "height", "N/A"),
+        }
+        logging.info(f"Media details for message {msgid} ({(msgid - fromID + 1)}/{total}): {media_info}")
+    except Exception as e:
+        logging.error(f"Failed to log media details: {e}")
 
 
 def print_examples():
