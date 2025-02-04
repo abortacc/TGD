@@ -4,6 +4,7 @@ from os.path import exists
 from typing import Tuple
 from utils import wait, progress, get_media_type, print_dowload_msg, configfile, print_examples
 from uuid import uuid4
+import json
 
 
 LINKS_FILE = "links.txt"
@@ -30,8 +31,16 @@ def preProcess() -> Tuple[str, str, str]:
                 with temp:
                     ss = temp.export_session_string()
                 print()
+
+            config_data = {
+                "api_id": api_id,
+                "api_hash": api_hash,
+                "session_string": ss
+            }
+
             with open(configfile, "w") as file:
-                file.write(api_id + "\n" + api_hash + "\n" + ss)
+                json.dump(config_data, file, indent=4)
+
             return api_id, api_hash, ss
         except KeyboardInterrupt:
             print("\nKeyboard interrupt detected. Exiting...")
@@ -40,12 +49,15 @@ def preProcess() -> Tuple[str, str, str]:
             print(e)
             wait()
     else:
-        with open(configfile, "r") as file:
-            data = file.readlines()
         try:
-            api_id, api_hash, ss = data
+            with open(configfile, "r") as file:
+                config_data = json.load(file)
+            api_id = config_data["api_id"]
+            api_hash = config_data["api_hash"]
+            ss = config_data["session_string"]
             return api_id, api_hash, ss
-        except:
+        except Exception as e:
+            print("Error reading config file:", e)
             print("Retry... by deleting", configfile)
             wait()
 

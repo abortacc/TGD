@@ -88,7 +88,7 @@ Examples:
           )
 
 
-configfile = "tgd.txt"
+configfile = "config.json"
 TGD = """
   ▄██████▄    ▄██████▄    ████████▄
  ██▀▀███▀▀██  ███    ███  ███   ▀███
