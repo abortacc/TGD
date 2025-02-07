@@ -3,6 +3,7 @@ from pyrogram.types import Message
 from pyrogram import enums
 from time import time
 from os import system, name as osname
+import os
 import logging
 
 
@@ -125,6 +126,16 @@ def log_media_details(media, msgid: int, fromID: int, total: int):
         logging.info(f"Media details for message {msgid} ({(msgid - fromID + 1)}/{total}): {media_info}")
     except Exception as e:
         logging.error(f"Failed to log media details: {e}")
+
+
+def get_chat_folder(chat_id: int, chat_title: str) -> str:
+    folder_name = chat_title or str(chat_id)
+    folder_name = "".join(c if c.isalnum() or c in (' ', '_') else '_' for c in folder_name)
+    folder_path = os.path.join("downloads", folder_name)
+    
+    os.makedirs(folder_path, exist_ok=True)
+    
+    return folder_path
 
 
 def print_examples():

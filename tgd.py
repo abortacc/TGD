@@ -2,7 +2,7 @@ from pyrogram import Client
 from pyrogram.types import User, Message
 from os.path import exists
 from typing import Tuple
-from utils import wait, progress, get_media_type, print_dowload_msg, configfile, print_examples, create_logging_config, log_media_details
+from utils import wait, progress, get_media_type, print_dowload_msg, configfile, print_examples, create_logging_config, log_media_details, get_chat_folder
 from uuid import uuid4
 import json
 import logging
@@ -18,7 +18,7 @@ def setup_logging(settings: dict):
             create_logging_config()
         
         from logging.config import fileConfig
-        fileConfig("logging.conf")
+        fileConfig("logging.conf", encoding="utf-8")
         logging.info("Logging has been enabled with logging.conf.")
     else:
         logging.basicConfig(level=logging.CRITICAL)
@@ -100,6 +100,10 @@ def handle_link(link: str):
         logging.warning(f"'{link}' - Not a Telegram Link")
         print(f"'{link}' - Not a Telegram Link")
         return
+    
+    chat = acc.get_chat(chatid)
+    chat_folder = get_chat_folder(chat.id, chat.title)
+
     total = toID + 1 - fromID
     for msgid in range(fromID, toID + 1):
         msg: Message = acc.get_messages(chatid, msgid)
@@ -107,22 +111,27 @@ def handle_link(link: str):
             logging.info(f"Message not found: {chatid}/{msgid}, Skipping...")
             print("Message not found:", chatid, "/", msgid, "Skipping...\n")
             continue
+        
         media = get_media_type(msg)
         if media:
-            # Логирование метаданных медиа
             log_media_details(media, msgid, fromID, total)
             print_dowload_msg(media, msgid, fromID, total)
         else:
             logging.info(f"Text Content ({(msgid - fromID + 1)}/{total})")
             print("Text Content", f"({(msgid - fromID + 1)}/{total})")
+        
         try:
             file = acc.download_media(
-                msg, progress=progress, progress_args=(uuid4(),))
+                msg, 
+                file_name=os.path.join(chat_folder, ""),
+                progress=progress, 
+                progress_args=(uuid4(),)
+            )
             logging.info(f"File saved at: {file}")
             print("\nSaved at", file, "\n")
         except ValueError as e:
             if str(e) == "This message doesn't contain any downloadable media":
-                txtfile = f"downloads/{str(msg.chat.id)[-10:]}-{msg.id}.txt"
+                txtfile = os.path.join(chat_folder, f"{str(msg.chat.id)[-10:]}-{msg.id}.txt")
                 with open(txtfile, "w", encoding="utf-8") as file:
                     file.write(str(msg.text))
                 logging.info(f"Text content saved at: {txtfile}")
