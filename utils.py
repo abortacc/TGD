@@ -5,6 +5,7 @@ from time import time
 from os import system, name as osname
 import os
 import logging
+import time
 
 
 def wait():
@@ -136,6 +137,18 @@ def get_chat_folder(chat_id: int, chat_title: str) -> str:
     os.makedirs(folder_path, exist_ok=True)
     
     return folder_path
+
+
+def limit_download_speed(start_time: float, downloaded_bytes: int, speed_limit_mb: float):
+    elapsed_time = time.time() - start_time
+    if elapsed_time == 0:
+        return
+    
+    speed_limit_bytes = speed_limit_mb * 1024 * 1024
+    expected_time = downloaded_bytes / speed_limit_bytes
+    
+    if elapsed_time < expected_time:
+        time.sleep(expected_time - elapsed_time)
 
 
 def print_examples():

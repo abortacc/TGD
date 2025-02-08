@@ -2,11 +2,12 @@ from pyrogram import Client
 from pyrogram.types import User, Message
 from os.path import exists
 from typing import Tuple
-from utils import wait, progress, get_media_type, print_dowload_msg, configfile, print_examples, create_logging_config, log_media_details, get_chat_folder
+from utils import wait, progress, get_media_type, print_dowload_msg, configfile, print_examples, create_logging_config, log_media_details, get_chat_folder, limit_download_speed
 from uuid import uuid4
 import json
 import logging
 import os
+import time
 
 
 LINKS_FILE = "links.txt"
@@ -16,7 +17,7 @@ def setup_logging(settings: dict):
     if settings.get("logging", False):
         if not os.path.exists("logging.conf"):
             create_logging_config()
-        
+
         from logging.config import fileConfig
         fileConfig("logging.conf", encoding="utf-8")
         logging.info("Logging has been enabled with logging.conf.")
@@ -50,7 +51,10 @@ def preProcess() -> Tuple[str, str, str, dict]:
                 "session_string": ss,
                 "settings": {
                     "enable_links_auto_read": False,
-                    "logging": False
+                    "logging": False,
+                    "download_speed_limit": 2,
+                    "wait_seconds": 0,
+                    "post_step": 1
                 }
             }
             with open(configfile, "w") as file:
@@ -71,6 +75,11 @@ def preProcess() -> Tuple[str, str, str, dict]:
             api_hash = config_data["api_hash"]
             ss = config_data["session_string"]
             settings = config_data.get("settings", {})
+
+            settings["download_speed_limit"] = max(settings.get("download_speed_limit", 2), 0.1)
+            settings["wait_seconds"] = max(settings.get("wait_seconds", 10), 0)
+            settings["post_step"] = max(settings.get("post_step", 3), 1)
+
             setup_logging(settings)
             return api_id, api_hash, ss, settings
         except Exception as e:
@@ -86,7 +95,7 @@ def read_links() -> list[str]:
     return []
 
 
-def handle_link(link: str):
+def handle_link(link: str, settings: dict):
     if link.startswith("https://t.me/"):
         datas = link.split("/")
         temp = datas[-1].replace("?single", "").split("-")
@@ -100,45 +109,62 @@ def handle_link(link: str):
         logging.warning(f"'{link}' - Not a Telegram Link")
         print(f"'{link}' - Not a Telegram Link")
         return
-    
+
     chat = acc.get_chat(chatid)
     chat_folder = get_chat_folder(chat.id, chat.title)
-
     total = toID + 1 - fromID
-    for msgid in range(fromID, toID + 1):
-        msg: Message = acc.get_messages(chatid, msgid)
-        if msg.empty:
-            logging.info(f"Message not found: {chatid}/{msgid}, Skipping...")
-            print("Message not found:", chatid, "/", msgid, "Skipping...\n")
-            continue
-        
-        media = get_media_type(msg)
-        if media:
-            log_media_details(media, msgid, fromID, total)
-            print_dowload_msg(media, msgid, fromID, total)
-        else:
-            logging.info(f"Text Content ({(msgid - fromID + 1)}/{total})")
-            print("Text Content", f"({(msgid - fromID + 1)}/{total})")
-        
-        try:
-            file = acc.download_media(
-                msg, 
-                file_name=os.path.join(chat_folder, ""),
-                progress=progress, 
-                progress_args=(uuid4(),)
-            )
-            logging.info(f"File saved at: {file}")
-            print("\nSaved at", file, "\n")
-        except ValueError as e:
-            if str(e) == "This message doesn't contain any downloadable media":
-                txtfile = os.path.join(chat_folder, f"{str(msg.chat.id)[-10:]}-{msg.id}.txt")
-                with open(txtfile, "w", encoding="utf-8") as file:
-                    file.write(str(msg.text))
-                logging.info(f"Text content saved at: {txtfile}")
-                print("Saved at", txtfile, "\n")
+
+    speed_limit_mb = settings.get("download_speed_limit", 2)
+    wait_seconds = settings.get("wait_seconds", 10)
+    post_step = settings.get("post_step", 3)
+
+    for i in range(fromID, toID + 1, post_step):
+        group_end = min(i + post_step, toID + 1)
+        for msgid in range(i, group_end):
+            msg: Message = acc.get_messages(chatid, msgid)
+            if msg.empty:
+                logging.info(f"Message not found: {chatid}/{msgid}, Skipping...")
+                print("Message not found:", chatid, "/", msgid, "Skipping...\n")
+                continue
+
+            media = get_media_type(msg)
+            if media:
+                log_media_details(media, msgid, fromID, total)
+                print_dowload_msg(media, msgid, fromID, total)
             else:
-                logging.error(f"Error downloading media: {e}")
-                print(e, "\n")
+                logging.info(f"Text Content ({(msgid - fromID + 1)}/{total})")
+                print("Text Content", f"({(msgid - fromID + 1)}/{total})")
+
+            try:
+                start_time = time.time()
+                file = acc.download_media(
+                    msg, 
+                    file_name=os.path.join(chat_folder, ""),
+                    progress=progress, 
+                    progress_args=(uuid4(),)
+                )
+                if file:
+                    file_size = os.path.getsize(file)
+                    limit_download_speed(start_time, file_size, speed_limit_mb)
+
+                logging.info(f"File saved at: {file}")
+                print("\nSaved at", file, "\n")
+            except ValueError as e:
+                if str(e) == "This message doesn't contain any downloadable media":
+                    txtfile = os.path.join(chat_folder, f"{str(msg.chat.id)[-10:]}-{msg.id}.txt")
+                    with open(txtfile, "w", encoding="utf-8") as file:
+                        file.write(str(msg.text))
+                    logging.info(f"Text content saved at: {txtfile}")
+                    print("Saved at", txtfile, "\n")
+                else:
+                    logging.error(f"Error downloading media: {e}")
+                    print(e, "\n")
+
+        if group_end <= toID:
+            logging.info(f"Waiting for {wait_seconds} seconds before next group...")
+            if wait_seconds != 0:
+                print(f"Waiting for {wait_seconds} seconds before next group...\n")
+                time.sleep(wait_seconds)
 
 
 def main(settings: dict):
@@ -156,7 +182,7 @@ def main(settings: dict):
                     logging.info(f"Processing {len(links)} links from {LINKS_FILE}.")
                     print("Processing links from", LINKS_FILE)
                     for link in links:
-                        handle_link(link)
+                        handle_link(link, settings)
             else:
                 logging.info("Automatic links reading is disabled in config.")
                 print("Automatic links reading is disabled in config.")
@@ -166,7 +192,7 @@ def main(settings: dict):
                 if link.lower() == "exit":
                     break
                 logging.info(f"Handling link: {link}")
-                handle_link(link)
+                handle_link(link, settings)
     except KeyboardInterrupt:
         logging.info("Keyboard interrupt detected. Exiting...")
         print("\nKeyboard interrupt detected. Exiting...")
