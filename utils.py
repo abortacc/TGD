@@ -6,6 +6,28 @@ from os import system, name as osname
 import os
 import logging
 import time
+import random
+
+
+class RateLimiter:
+    def __init__(self, max_requests_per_second):
+        self.max_requests_per_second = max_requests_per_second
+        self.last_request_time = 0
+
+    def wait(self):
+        current_time = time.time()
+        elapsed_time = current_time - self.last_request_time
+        if elapsed_time < 1 / self.max_requests_per_second:
+            time.sleep((1 / self.max_requests_per_second) - elapsed_time)
+        self.last_request_time = time.time()
+
+
+def random_delay(settings):
+    delay = random.uniform(
+        settings.get("random_delay_min", 1),
+        settings.get("random_delay_max", 5)
+    )
+    time.sleep(delay)
 
 
 def wait():
@@ -143,12 +165,21 @@ def limit_download_speed(start_time: float, downloaded_bytes: int, speed_limit_m
     elapsed_time = time.time() - start_time
     if elapsed_time == 0:
         return
-    
+
     speed_limit_bytes = speed_limit_mb * 1024 * 1024
     expected_time = downloaded_bytes / speed_limit_bytes
-    
+
     if elapsed_time < expected_time:
         time.sleep(expected_time - elapsed_time)
+
+
+def log_api_request(action: str, chat_id: int = None, message_id: int = None):
+    log_message = f"API Request: {action}"
+    if chat_id is not None:
+        log_message += f", Chat ID: {chat_id}"
+    if message_id is not None:
+        log_message += f", Message ID: {message_id}"
+    logging.info(log_message)
 
 
 def print_examples():

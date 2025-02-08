@@ -2,7 +2,12 @@ from pyrogram import Client
 from pyrogram.types import User, Message
 from os.path import exists
 from typing import Tuple
-from utils import wait, progress, get_media_type, print_dowload_msg, configfile, print_examples, create_logging_config, log_media_details, get_chat_folder, limit_download_speed
+from utils import (
+    wait, progress, get_media_type, print_dowload_msg, configfile,
+    print_examples, create_logging_config, log_media_details,
+    get_chat_folder, limit_download_speed, random_delay, RateLimiter,
+    log_api_request
+)
 from uuid import uuid4
 import json
 import logging
@@ -54,7 +59,10 @@ def preProcess() -> Tuple[str, str, str, dict]:
                     "logging": False,
                     "download_speed_limit": 2,
                     "wait_seconds": 0,
-                    "post_step": 1
+                    "post_step": 1,
+                    "max_requests_per_second": 5,
+                    "random_delay_min": 1,
+                    "random_delay_max": 5
                 }
             }
             with open(configfile, "w") as file:
@@ -96,6 +104,8 @@ def read_links() -> list[str]:
 
 
 def handle_link(link: str, settings: dict):
+    global rate_limiter
+    
     if link.startswith("https://t.me/"):
         datas = link.split("/")
         temp = datas[-1].replace("?single", "").split("-")
@@ -109,24 +119,29 @@ def handle_link(link: str, settings: dict):
         logging.warning(f"'{link}' - Not a Telegram Link")
         print(f"'{link}' - Not a Telegram Link")
         return
-
+    
     chat = acc.get_chat(chatid)
     chat_folder = get_chat_folder(chat.id, chat.title)
     total = toID + 1 - fromID
-
     speed_limit_mb = settings.get("download_speed_limit", 2)
     wait_seconds = settings.get("wait_seconds", 10)
     post_step = settings.get("post_step", 3)
-
+    
     for i in range(fromID, toID + 1, post_step):
         group_end = min(i + post_step, toID + 1)
         for msgid in range(i, group_end):
+            log_api_request("Fetching message", chat_id=chatid, message_id=msgid)
+            
+            rate_limiter.wait()
+            
+            random_delay(settings)
+            
             msg: Message = acc.get_messages(chatid, msgid)
             if msg.empty:
                 logging.info(f"Message not found: {chatid}/{msgid}, Skipping...")
                 print("Message not found:", chatid, "/", msgid, "Skipping...\n")
                 continue
-
+            
             media = get_media_type(msg)
             if media:
                 log_media_details(media, msgid, fromID, total)
@@ -134,8 +149,10 @@ def handle_link(link: str, settings: dict):
             else:
                 logging.info(f"Text Content ({(msgid - fromID + 1)}/{total})")
                 print("Text Content", f"({(msgid - fromID + 1)}/{total})")
-
+            
             try:
+                log_api_request("Downloading media", chat_id=chatid, message_id=msgid)
+                
                 start_time = time.time()
                 file = acc.download_media(
                     msg, 
@@ -146,7 +163,6 @@ def handle_link(link: str, settings: dict):
                 if file:
                     file_size = os.path.getsize(file)
                     limit_download_speed(start_time, file_size, speed_limit_mb)
-
                 logging.info(f"File saved at: {file}")
                 print("\nSaved at", file, "\n")
             except ValueError as e:
@@ -159,7 +175,7 @@ def handle_link(link: str, settings: dict):
                 else:
                     logging.error(f"Error downloading media: {e}")
                     print(e, "\n")
-
+        
         if group_end <= toID:
             logging.info(f"Waiting for {wait_seconds} seconds before next group...")
             if wait_seconds != 0:
@@ -207,5 +223,8 @@ def main(settings: dict):
 if __name__ == "__main__":
     api_id, api_hash, ss, settings = preProcess()
     acc = Client("TGD", api_id=api_id, api_hash=api_hash, session_string=ss, in_memory=True)
+
+    rate_limiter = RateLimiter(settings.get("max_requests_per_second", 5))
+
     main(settings)
     wait()
