@@ -173,7 +173,7 @@ TGD = """
      ███      ███    ███  ███   ▄███
     ▄████    ████████▀   ████████▀
 """
-VERSION = "1.3.M"
+VERSION = "1.4.M"
 system("cls" if osname == "nt" else "clear")
 print(TGD)
 print("	TeleGram Downloader")
