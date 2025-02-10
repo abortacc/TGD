@@ -109,7 +109,7 @@ handlers=fileHandler,consoleHandler
 [handler_fileHandler]
 class=FileHandler
 formatter=genericFormatter
-args=('app.log', 'a')
+args=('app.log', 'a', 'utf-8')
 [handler_consoleHandler]
 class=StreamHandler
 formatter=genericFormatter
