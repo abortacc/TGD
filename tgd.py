@@ -5,7 +5,7 @@ from typing import Tuple
 from utils import (
     wait, progress, get_media_type, print_dowload_msg, configfile,
     print_examples, create_logging_config, log_media_details,
-    get_chat_folder, limit_download_speed, random_delay, RateLimiter,
+    get_chat_folder, random_delay, RateLimiter,
     log_api_request
 )
 from uuid import uuid4
@@ -57,7 +57,6 @@ def preProcess() -> Tuple[str, str, str, dict]:
                 "settings": {
                     "enable_links_auto_read": False,
                     "logging": False,
-                    "download_speed_limit": 2,
                     "wait_seconds": 0,
                     "post_step": 1,
                     "max_requests_per_second": 5,
@@ -83,11 +82,11 @@ def preProcess() -> Tuple[str, str, str, dict]:
             api_hash = config_data["api_hash"]
             ss = config_data["session_string"]
             settings = config_data.get("settings", {})
-
-            settings["download_speed_limit"] = max(settings.get("download_speed_limit", 2), 0.1)
+            
+            logging.debug(f"Loaded settings: {settings}")
+            
             settings["wait_seconds"] = max(settings.get("wait_seconds", 10), 0)
             settings["post_step"] = max(settings.get("post_step", 3), 1)
-
             setup_logging(settings)
             return api_id, api_hash, ss, settings
         except Exception as e:
@@ -123,9 +122,8 @@ def handle_link(link: str, settings: dict):
     chat = acc.get_chat(chatid)
     chat_folder = get_chat_folder(chat.id, chat.title)
     total = toID + 1 - fromID
-    speed_limit_mb = settings.get("download_speed_limit", 2)
-    wait_seconds = settings.get("wait_seconds", 10)
-    post_step = settings.get("post_step", 3)
+    wait_seconds = settings.get("wait_seconds", 10)  # Используем значение из настроек
+    post_step = settings.get("post_step", 3)         # Используем значение из настроек
     
     for i in range(fromID, toID + 1, post_step):
         group_end = min(i + post_step, toID + 1)
@@ -152,8 +150,7 @@ def handle_link(link: str, settings: dict):
             
             try:
                 log_api_request("Downloading media", chat_id=chatid, message_id=msgid)
-                
-                start_time = time.time()
+
                 file = acc.download_media(
                     msg, 
                     file_name=os.path.join(chat_folder, ""),
@@ -162,9 +159,28 @@ def handle_link(link: str, settings: dict):
                 )
                 if file:
                     file_size = os.path.getsize(file)
-                    limit_download_speed(start_time, file_size, speed_limit_mb)
-                logging.info(f"File saved at: {file}")
-                print("\nSaved at", file, "\n")
+                    
+                    logging.debug(f"Downloaded file: {file}, Size: {file_size} bytes")
+                    
+                    expected_size = msg.media.file_size if hasattr(msg.media, 'file_size') else None
+                    if expected_size and file_size != expected_size:
+                        logging.error(f"Incomplete download: Expected {expected_size} bytes, got {file_size} bytes.")
+                        print(f"Incomplete download: Expected {expected_size} bytes, got {file_size} bytes.")
+                        
+                        file = acc.download_media(
+                            msg,
+                            file_name=os.path.join(chat_folder, ""),
+                            progress=progress,
+                            progress_args=(uuid4(),)
+                        )
+                        if file:
+                            file_size = os.path.getsize(file)
+                            if file_size != expected_size:
+                                logging.error("Retry failed. File is still incomplete.")
+                                print("Retry failed. File is still incomplete.")
+                    else:
+                        logging.info(f"File saved at: {file}")
+                        print("\nSaved at", file, "\n")
             except ValueError as e:
                 if str(e) == "This message doesn't contain any downloadable media":
                     txtfile = os.path.join(chat_folder, f"{str(msg.chat.id)[-10:]}-{msg.id}.txt")
