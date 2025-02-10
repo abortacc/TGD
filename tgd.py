@@ -13,6 +13,9 @@ import json
 import logging
 import os
 import time
+import re
+import tempfile
+import shutil
 
 
 LINKS_FILE = "links.txt"
@@ -102,6 +105,32 @@ def read_links() -> list[str]:
     return []
 
 
+def clean_filename(filename):
+    cleaned = re.sub(r'[<>:"/\\|?*]', '_', filename)
+    cleaned = cleaned.strip()
+    return cleaned
+
+def get_file_extension(media) -> str:
+    if hasattr(media, "mime_type") and media.mime_type:
+        mime = media.mime_type.split("/")[-1]
+        if mime in ["mp4", "mpeg", "quicktime"]:
+            return "mp4"
+        elif mime == "webm":
+            return "webm"
+        elif mime == "ogg":
+            return "ogg"
+        elif mime == "x-wav":
+            return "wav"
+    
+    if media.type == "audio":
+        return "mp3"
+    elif media.type == "video":
+        return "mp4"
+    elif media.type == "document":
+        return "dat"
+    else:
+        return "dat"
+
 def handle_link(link: str, settings: dict):
     global rate_limiter
     
@@ -122,8 +151,8 @@ def handle_link(link: str, settings: dict):
     chat = acc.get_chat(chatid)
     chat_folder = get_chat_folder(chat.id, chat.title)
     total = toID + 1 - fromID
-    wait_seconds = settings.get("wait_seconds", 10)  # Используем значение из настроек
-    post_step = settings.get("post_step", 3)         # Используем значение из настроек
+    wait_seconds = settings.get("wait_seconds", 10)
+    post_step = settings.get("post_step", 3)
     
     for i in range(fromID, toID + 1, post_step):
         group_end = min(i + post_step, toID + 1)
@@ -151,46 +180,43 @@ def handle_link(link: str, settings: dict):
             try:
                 log_api_request("Downloading media", chat_id=chatid, message_id=msgid)
 
-                file = acc.download_media(
-                    msg, 
-                    file_name=os.path.join(chat_folder, ""),
-                    progress=progress, 
-                    progress_args=(uuid4(),)
-                )
-                if file:
-                    file_size = os.path.getsize(file)
-                    
-                    logging.debug(f"Downloaded file: {file}, Size: {file_size} bytes")
-                    
-                    expected_size = msg.media.file_size if hasattr(msg.media, 'file_size') else None
-                    if expected_size and file_size != expected_size:
-                        logging.error(f"Incomplete download: Expected {expected_size} bytes, got {file_size} bytes.")
-                        print(f"Incomplete download: Expected {expected_size} bytes, got {file_size} bytes.")
-                        
-                        file = acc.download_media(
-                            msg,
-                            file_name=os.path.join(chat_folder, ""),
-                            progress=progress,
-                            progress_args=(uuid4(),)
-                        )
-                        if file:
-                            file_size = os.path.getsize(file)
-                            if file_size != expected_size:
-                                logging.error("Retry failed. File is still incomplete.")
-                                print("Retry failed. File is still incomplete.")
+                temp_dir = tempfile.mkdtemp()
+
+                if media:
+                    if hasattr(media, 'file_name') and media.file_name:
+                        file_name = clean_filename(media.file_name)
                     else:
-                        logging.info(f"File saved at: {file}")
-                        print("\nSaved at", file, "\n")
-            except ValueError as e:
-                if str(e) == "This message doesn't contain any downloadable media":
+                        extension = get_file_extension(media)
+                        file_name = f"{msgid}_{media.__class__.__name__.lower()}.{extension}"
+
+                    temp_file_path = os.path.join(temp_dir, file_name)
+
+                    file = acc.download_media(
+                        msg, 
+                        file_name=temp_file_path,
+                        progress=progress, 
+                        progress_args=(uuid4(),)
+                    )
+
+                    if file:
+                        final_file_path = os.path.join(chat_folder, file_name)
+                        shutil.move(temp_file_path, final_file_path)
+                        logging.info(f"File saved at: {final_file_path}")
+                        print("\nSaved at", final_file_path, "\n")
+
+                else:
                     txtfile = os.path.join(chat_folder, f"{str(msg.chat.id)[-10:]}-{msg.id}.txt")
                     with open(txtfile, "w", encoding="utf-8") as file:
-                        file.write(str(msg.text))
+                        file.write(str(msg.text) if msg.text else "[No Text Content]")
                     logging.info(f"Text content saved at: {txtfile}")
                     print("Saved at", txtfile, "\n")
-                else:
-                    logging.error(f"Error downloading media: {e}")
-                    print(e, "\n")
+
+            except Exception as e:
+                logging.error(f"An error occurred: {e}")
+                print(f"\n{e}\nAn error occurred. Exiting...")
+            finally:
+                shutil.rmtree(temp_dir)
+
         
         if group_end <= toID:
             logging.info(f"Waiting for {wait_seconds} seconds before next group...")
